@@ -1,6 +1,6 @@
 #!/bin/bash
-# vector-narrower - Launcher for the vector-narrower kc-flow module.
-# Summary: Resolves the root flow path and executes it through kc-flow.
+# vector-narrower - Vector Content Narrower
+# Summary: Launcher for the vector-narrower app, mapping subcommands to flow execution.
 #
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
@@ -13,6 +13,40 @@ MODULE_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
 FLOW_PATH="$MODULE_ROOT/src/flow/vector-narrower.flow"
 KC_FLOW_BIN="${KC_FLOW_BIN:-kc-flow}"
 
+# Prints usage and exits.
+# @return Does not return.
+usage() {
+    cat <<EOF
+Usage: vector-narrower <command> [options]
+
+Commands:
+    pack   Build a vector database from text input.
+    match  Search the vector database using a semantic query.
+
+Shared Options:
+    --fd-in <fd>       Input descriptor (default: stdin).
+    --fd-out <fd>      Output descriptor (default: stdout).
+    --trace            Show internal flow execution trace.
+    --help             Show this help message.
+
+'pack' Options:
+    --store <path>     Path to the vector database file.
+    --model <path>     Path to the GGUF model file.
+    --dim <int>        Vector dimension (default: 384).
+    --emb-socket <p>   Path to the embedding daemon socket.
+
+'match' Options:
+    --store <path>     Path to the vector database file.
+    --model <path>     Path to the GGUF model file.
+    --dim <int>        Vector dimension (default: 384).
+    --emb-socket <p>   Path to the embedding daemon socket.
+    --threshold <f>    Similarity threshold (0.0-1.0, default: 0.9).
+    --select-mode <m>  Selection mode (default: best-per-unit).
+    --score-mode <m>   Scoring mode (default: cosine-similarity).
+EOF
+    exit 0
+}
+
 # Prints one fatal error and exits.
 # @param $1 Error message.
 # @return Does not return.
@@ -21,34 +55,99 @@ fail() {
     exit 1
 }
 
-# Runs one command quietly, preserving stderr only on failure.
-# @param $@ Command and args.
-# @return Does not return.
-run_quiet_exec() {
-    stderr_path="$(mktemp)"
-    if "$@" 2>"$stderr_path"; then
-        rm -f "$stderr_path"
-        exit 0
-    fi
-
-    cat "$stderr_path" >&2
-    rm -f "$stderr_path"
-    exit 1
-}
-
-# Verifies that required runtime inputs are available.
+# Entry point for the launcher.
+# @param $@ Script arguments.
 # @return 0 on success.
-require_runtime() {
-    [ -f "$FLOW_PATH" ] || fail "Flow file not found at $FLOW_PATH."
-    command -v "$KC_FLOW_BIN" >/dev/null 2>&1 || fail \
-        "kc-flow runtime not found: $KC_FLOW_BIN"
-}
-
-# Runs the module entry point.
-# @return Does not return.
 main() {
-    require_runtime
-    run_quiet_exec "$KC_FLOW_BIN" --run "$FLOW_PATH" "$@"
+    [ $# -lt 1 ] && usage
+
+    local command="$1"
+    local fd_in=0
+    local fd_out=1
+    local trace_flag=""
+    shift
+
+    case "$command" in
+        pack|match)
+            ;;
+        -h|--help|help)
+            usage
+            ;;
+        *)
+            fail "Unknown command: $command"
+            ;;
+    esac
+
+    local args=()
+    args+=("--set" "flow.param.mode=$command")
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --fd-in)
+                fd_in="$2"
+                shift 2
+                ;;
+            --fd-out)
+                fd_out="$2"
+                shift 2
+                ;;
+            --trace)
+                trace_flag="--trace"
+                shift
+                ;;
+            --store|--map)
+                args+=("--set" "flow.param.store.path=$2")
+                shift 2
+                ;;
+            --model)
+                args+=("--set" "flow.param.emb.model=$2")
+                shift 2
+                ;;
+            --dim)
+                args+=("--set" "flow.param.emb.dim=$2")
+                shift 2
+                ;;
+            --emb-socket)
+                args+=("--set" "flow.param.emb.socket=$2")
+                shift 2
+                ;;
+            --threshold)
+                args+=("--set" "flow.param.select.threshold=$2")
+                shift 2
+                ;;
+            --select-mode)
+                args+=("--set" "flow.param.select.mode=$2")
+                shift 2
+                ;;
+            --score-mode)
+                args+=("--set" "flow.param.score.mode=$2")
+                shift 2
+                ;;
+            --min-tokens)
+                args+=("--set" "flow.param.ngr.min_tokens=$2")
+                shift 2
+                ;;
+            --max-tokens)
+                args+=("--set" "flow.param.ngr.max_tokens=$2")
+                shift 2
+                ;;
+            -h|--help)
+                usage
+                ;;
+            *)
+                fail "Unknown option: $1"
+                ;;
+        esac
+    done
+
+    [ "$fd_in" -eq "$fd_in" ] 2>/dev/null || fail "Invalid --fd-in: $fd_in"
+    [ "$fd_out" -eq "$fd_out" ] 2>/dev/null || fail "Invalid --fd-out: $fd_out"
+
+    exec "$KC_FLOW_BIN" --run "$FLOW_PATH" \
+        --fd-in "$fd_in" \
+        --fd-out "$fd_out" \
+        $trace_flag \
+        "${args[@]}"
 }
 
 main "$@"

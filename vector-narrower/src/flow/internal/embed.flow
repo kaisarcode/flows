@@ -1,0 +1,7 @@
+flow.id=embed
+flow.param.emb.model=
+flow.param.emb.socket=
+flow.param.emb.dim=384
+flow.link=node-1
+
+node.node-1.exec="$KC_FLOW_DIR/../../bin/vnw-embed" "<flow.param.emb.model>" "<flow.param.emb.socket>" "<flow.param.emb.dim>"

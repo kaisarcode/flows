@@ -1,4 +1,4 @@
-flow.id=vnw-query-segment
+flow.id=query-segment
 flow.param.ngr.max_tokens=5
 flow.param.ngr.min_tokens=1
 flow.param.ngr.separator= 	

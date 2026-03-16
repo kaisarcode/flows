@@ -1,4 +1,4 @@
-flow.id=vnw-score-select
+flow.id=score-select
 flow.param.mode=match
 flow.param.score.socket=
 flow.param.emb.dim=384
@@ -9,4 +9,4 @@ flow.param.work.segments_path=/tmp/vector-narrower.match.segments
 flow.param.work.embeddings_path=/tmp/vector-narrower.match.embeddings
 flow.link=node-1
 
-node.node-1.exec="$KC_FLOW_DIR/../bin/vnw-score-select" "<flow.param.mode>" "<flow.param.score.socket>" "<flow.param.emb.dim>" "<flow.param.score.mode>" "<flow.param.select.threshold>" "<flow.param.select.mode>" "<flow.param.work.segments_path>" "<flow.param.work.embeddings_path>"
+node.node-1.exec="$KC_FLOW_DIR/../../bin/vnw-score-select" "<flow.param.mode>" "<flow.param.score.socket>" "<flow.param.emb.dim>" "<flow.param.score.mode>" "<flow.param.select.threshold>" "<flow.param.select.mode>" "<flow.param.work.segments_path>" "<flow.param.work.embeddings_path>"

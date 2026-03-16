@@ -1,0 +1,6 @@
+flow.id=store-read
+flow.param.mode=match
+flow.param.store.path=/tmp/vector-narrower.store
+flow.link=node-1
+
+node.node-1.exec="$KC_FLOW_DIR/../../bin/vnw-store-read" "<flow.param.mode>" "<flow.param.store.path>"

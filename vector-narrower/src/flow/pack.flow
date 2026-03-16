@@ -1,4 +1,4 @@
-flow.id=vnw-pack
+flow.id=pack
 flow.param.mode=pack
 flow.param.source.path=
 flow.param.store.path=/tmp/vector-narrower.store
@@ -11,13 +11,13 @@ flow.link=node-1
 node.node-1.exec="$KC_FLOW_DIR/../bin/vnw-pack-source" "<flow.param.mode>" "<flow.param.work.source_path>" "<flow.param.source.path>"
 node.node-1.link=node-2
 
-node.node-2.file=vnw-embed.flow
+node.node-2.file=internal/embed.flow
 node.node-2.param.emb.model=<flow.param.emb.model>
 node.node-2.param.emb.socket=<flow.param.emb.socket>
 node.node-2.param.emb.dim=<flow.param.emb.dim>
 node.node-2.link=node-3
 
-node.node-3.file=vnw-store-write.flow
+node.node-3.file=internal/store-write.flow
 node.node-3.param.mode=<flow.param.mode>
 node.node-3.param.store.path=<flow.param.store.path>
 node.node-3.param.work.source_path=<flow.param.work.source_path>

@@ -20,7 +20,7 @@ flow.param.work.embeddings_path=/tmp/vector-narrower.match.embeddings
 flow.link=node-pack
 flow.link=node-match
 
-node.node-pack.file=vnw-pack.flow
+node.node-pack.file=pack.flow
 node.node-pack.param.mode=<flow.param.mode>
 node.node-pack.param.source.path=<flow.param.source.path>
 node.node-pack.param.store.path=<flow.param.store.path>
@@ -29,7 +29,7 @@ node.node-pack.param.emb.socket=<flow.param.emb.socket>
 node.node-pack.param.emb.dim=<flow.param.emb.dim>
 node.node-pack.param.work.source_path=<flow.param.work.source_path>
 
-node.node-match.file=vnw-match.flow
+node.node-match.file=match.flow
 node.node-match.param.mode=<flow.param.mode>
 node.node-match.param.query.path=<flow.param.query.path>
 node.node-match.param.store.path=<flow.param.store.path>

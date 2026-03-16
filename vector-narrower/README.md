@@ -1,123 +1,82 @@
-# vector-narrower - kc-flow module
+# vector-narrower - Vector Content Narrower
 
-> **Note:** This module is in the development and testing phase, is not ready
-> for production use, and may change without prior notice.
+> **Note:** This application is in the development and testing phase, is not ready for production use, and may change without prior notice.
 
-`vector-narrower` is a reusable `kc-flow` module for vector narrowing
-processes.
-
-It keeps the same two real processes:
-
-- `pack`: read source texts, generate embeddings, persist text + vector records
-- `match`: segment a query, embed each unit, read the store, score candidates,
-    and emit matches
-
-The source of truth is now the flow model itself rather than one dedicated
-binary.
-
-The root launcher is `bin/vector-narrower`, which simply executes the module's
-root flow through `kc-flow`.
-
-Small helper scripts under `src/bin/` implement fd-oriented atomic actions that
-the current `kc-flow` runtime cannot safely express inline because its
-template parser reserves `<...>` for placeholders.
-
-## Flow Set
-
-- `src/flow/vnw-embed.flow`
-- `src/flow/vnw-store-write.flow`
-- `src/flow/vnw-store-read.flow`
-- `src/flow/vnw-query-segment.flow`
-- `src/flow/vnw-score-select.flow`
-- `src/flow/vnw-pack.flow`
-- `src/flow/vnw-match.flow`
-- `src/flow/vector-narrower.flow`
-
-## Hierarchy
-
-```text
-vector-narrower.flow
-├── vnw-pack.flow
-│   ├── vnw-embed.flow
-│   └── vnw-store-write.flow
-└── vnw-match.flow
-    ├── vnw-query-segment.flow
-    ├── vnw-embed.flow
-    ├── vnw-store-read.flow
-    └── vnw-score-select.flow
-```
-
-## Store Format
-
-The persisted map content is flow-defined and editable. Each stored record is
-one line:
-
-```text
-<source-text>\t<embedding-json>
-```
-
-The file is persisted through `kc-mmp`, so the backing store remains mmap-ready
-without hardcoding a binary-only record layout into a dedicated application.
+`vector-narrower` is an application for semantic content filtering. It identifies known vectorized fragments within a text stream using vector similarity matching against a memory-mapped database.
 
 ## Usage
 
-### Pack
+### Build the Vector Database (Pack)
+Take a list of text entries and generate their embeddings to create a serialized vector store:
 
 ```bash
-exec 3<input.txt
-./bin/vector-narrower \
-    --fd-in 3 \
-    --set flow.param.mode=pack \
-    --set flow.param.store.path=/tmp/vnw.store \
-    --set flow.param.emb.model=./etc/bge-small.gguf \
-    --set flow.param.emb.dim=384
+# Line-by-line text input to a vectorized map
+printf "The history of Rome\nCooking pasta" | vector-narrower pack --store kb.bin --model bge-small.gguf
 ```
 
-### Match
+### Semantic Matching (Match)
+Search the database using natural language. `vector-narrower` segments the query and finds the best semantic matches:
 
 ```bash
-exec 3<<<"how to cook italian food"
-./bin/vector-narrower \
-    --fd-in 3 \
-    --set flow.param.mode=match \
-    --set flow.param.store.path=/tmp/vnw.store \
-    --set flow.param.emb.model=./etc/bge-small.gguf \
-    --set flow.param.emb.dim=384 \
-    --set flow.param.ngr.max_tokens=5 \
-    --set flow.param.select.threshold=0.7
+# Querying the knowledge base
+echo "How to cook italian food" | vector-narrower match --store kb.bin --model bge-small.gguf --threshold 0.7
 ```
 
-### Optional persistent embedding daemon
+## Parameter Reference
 
-If embeddings are served through `kc-dmn`, set:
+### Commands
+- `pack`: Build a vector database from source text.
+- `match`: Search the database with a query.
+
+### Shared Options
+| Option | Description | Default |
+| :--- | :--- | :--- |
+| `--store` | Path to the vector database file. | `/tmp/vector-narrower.store` |
+| `--model` | Path to the GGUF model file. | `NULL` |
+| `--dim` | Vector dimension of the model. | `384` |
+| `--emb-socket`| Path to the embedding daemon socket (`kc-dmn`). | `NULL` |
+| `--fd-in` | Input descriptor for text or query. | `0` (stdin) |
+| `--fd-out` | Output descriptor for results or logs. | `1` (stdout) |
+| `--trace` | Show internal flow execution trace. | `false` |
+| `--help` | Show help and usage. | `false` |
+
+### `match` Specific Options
+| Option | Description | Default |
+| :--- | :--- | :--- |
+| `--threshold` | Similarity threshold (0.0 to 1.0) for matching. | `0.9` |
+| `--select-mode`| Filtering mode: `best-per-unit` or `all`. | `best-per-unit` |
+| `--score-mode` | Scoring algorithm: `cosine-similarity`. | `cosine-similarity` |
+
+## Install
+
+Run the autonomous installer:
 
 ```bash
---set flow.param.emb.socket=./run/kc-emb.sock
+wget -qO- https://raw.githubusercontent.com/kaisarcode/flows/slave/vector-narrower/install.sh | sudo bash
 ```
-
-`vnw-embed.flow` will use `kc-dmn` instead of `kc-emb --model`.
-
-## Important Params
-
-- `flow.param.mode`
-- `flow.param.store.path`
-- `flow.param.source.path`
-- `flow.param.query.path`
-- `flow.param.emb.model`
-- `flow.param.emb.socket`
-- `flow.param.emb.dim`
-- `flow.param.ngr.max_tokens`
-- `flow.param.ngr.min_tokens`
-- `flow.param.ngr.separator`
-- `flow.param.score.mode`
-- `flow.param.select.threshold`
-- `flow.param.select.mode`
 
 ## Testing
 
 ```bash
 ./test.sh
 ```
+
+## Internal Architecture
+
+`vector-narrower` is implemented as a `kc-flow` module. The public `vector-narrower` binary is a launcher that coordinates internal flow graphs and FD-oriented helpers.
+
+### Flow Decomposition
+- `src/flow/pack.flow`: Orchestrates the database building process.
+- `src/flow/match.flow`: Orchestrates the semantic search process.
+- `src/flow/internal/`: Contains reusable subflows for embedding, storage, and scoring.
+
+### Internal Helpers
+Located in `src/bin/`, these small FD-oriented utilities implement atomic actions that cannot be safely expressed inline within flow templates:
+- `vnw-pack-source`: Prepares source text for embedding.
+- `vnw-match-query`: Prepares matching environment.
+- `vnw-embed`: Handles model/daemon embedding logic.
+- `vnw-store-read`/`write`: Manages record serialization using `kc-mmp`.
+- `vnw-score-select`: Final candidate selection logic.
 
 ---
 

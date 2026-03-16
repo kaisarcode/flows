@@ -1,4 +1,4 @@
-flow.id=vnw-match
+flow.id=match
 flow.param.mode=match
 flow.param.query.path=
 flow.param.store.path=/tmp/vector-narrower.store
@@ -20,7 +20,7 @@ flow.link=node-1
 node.node-1.exec="$KC_FLOW_DIR/../bin/vnw-match-query" "<flow.param.mode>" "<flow.param.work.query_path>" "<flow.param.query.path>" "<flow.param.work.segments_path>" "<flow.param.work.embeddings_path>"
 node.node-1.link=node-2
 
-node.node-2.file=vnw-query-segment.flow
+node.node-2.file=internal/query-segment.flow
 node.node-2.param.ngr.max_tokens=<flow.param.ngr.max_tokens>
 node.node-2.param.ngr.min_tokens=<flow.param.ngr.min_tokens>
 node.node-2.param.ngr.separator=<flow.param.ngr.separator>
@@ -29,7 +29,7 @@ node.node-2.link=node-3
 node.node-3.exec="$KC_FLOW_DIR/../bin/vnw-capture" "<flow.param.work.segments_path>"
 node.node-3.link=node-4
 
-node.node-4.file=vnw-embed.flow
+node.node-4.file=internal/embed.flow
 node.node-4.param.emb.model=<flow.param.emb.model>
 node.node-4.param.emb.socket=<flow.param.emb.socket>
 node.node-4.param.emb.dim=<flow.param.emb.dim>
@@ -38,12 +38,12 @@ node.node-4.link=node-5
 node.node-5.exec="$KC_FLOW_DIR/../bin/vnw-capture" "<flow.param.work.embeddings_path>"
 node.node-5.link=node-6
 
-node.node-6.file=vnw-store-read.flow
+node.node-6.file=internal/store-read.flow
 node.node-6.param.mode=<flow.param.mode>
 node.node-6.param.store.path=<flow.param.store.path>
 node.node-6.link=node-7
 
-node.node-7.file=vnw-score-select.flow
+node.node-7.file=internal/score-select.flow
 node.node-7.param.mode=<flow.param.mode>
 node.node-7.param.score.socket=<flow.param.score.socket>
 node.node-7.param.emb.dim=<flow.param.emb.dim>
