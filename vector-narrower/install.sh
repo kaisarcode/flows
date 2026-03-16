@@ -10,35 +10,40 @@ set -e
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ID="vector-narrower"
-# Remote source for the launcher and package
 APP_REPO_RAW="https://raw.githubusercontent.com/kaisarcode/flows/slave/vector-narrower"
 SYS_BIN_DIR="/usr/local/bin"
-# Standard dependencies via kc-al0
 DEPS="kc-flow kc-ngr kc-emb kc-mmp kc-dmn"
 
 # Prints an error and exits.
+# @param $1 Error message.
+# @return Does not return.
 fail() {
     printf "Error: %s\n" "$1" >&2
     exit 1
 }
 
 # Fails when one remote asset is unavailable.
+# @param $1 Asset name.
+# @return Does not return.
 fail_unavailable() {
     fail "Remote asset is not available: $1"
 }
 
 # Verifies that the installer is running on Linux.
+# @return 0 on success.
 require_linux() {
     [ "$(uname -s)" = "Linux" ] || fail "install.sh currently targets Linux only."
 }
 
 # Verifies tools.
+# @return 0 on success.
 require_tools() {
     command -v wget >/dev/null 2>&1 || fail "wget is required."
     command -v sudo >/dev/null 2>&1 || fail "sudo is required."
 }
 
 # Detects architecture.
+# @return size_t Architecture string.
 detect_arch() {
     case "$(uname -m)" in
         x86_64) printf "x86_64" ;;
@@ -49,9 +54,12 @@ detect_arch() {
 }
 
 # Installs dependencies.
+# @param $1 Dependency name.
+# @param $2 Local mode flag.
+# @return 0 on success.
 install_dep() {
-    dep="$1"
-    local_mode="$2"
+    local dep="$1"
+    local local_mode="$2"
     if [ "$local_mode" = "true" ] && [ -f "$APP_DIR/../../kc-core/kc-al0/install.sh" ]; then
         sudo bash "$APP_DIR/../../kc-core/kc-al0/install.sh" "$dep"
     else
@@ -60,8 +68,11 @@ install_dep() {
 }
 
 # Installs the application.
+# @param $1 Local mode flag.
+# @return 0 on success.
 install_app() {
-    local_mode="$1"
+    local local_mode="$1"
+    local tmp_dir
 
     if [ "$local_mode" = "true" ]; then
         [ -f "$APP_DIR/bin/$APP_ID" ] || fail "Launcher script not found at ./bin/$APP_ID."
@@ -69,7 +80,6 @@ install_app() {
         return 0
     fi
 
-    # Remote installation:
     tmp_dir="$(mktemp -d)"
     trap 'rm -rf "$tmp_dir"' RETURN
 
@@ -77,10 +87,13 @@ install_app() {
     sudo install -m 0755 "$tmp_dir/$APP_ID" "$SYS_BIN_DIR/$APP_ID"
 }
 
+# Entry point for the installer.
+# @param $@ Script arguments.
+# @return 0 on success.
 main() {
+    local local_mode="false"
     require_linux
     require_tools
-    local_mode="false"
     [ "${1:-}" = "--local" ] && local_mode="true"
 
     for dep in $DEPS; do
