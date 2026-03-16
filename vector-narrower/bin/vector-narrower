@@ -11,6 +11,7 @@ set -e
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 MODULE_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
 FLOW_PATH="$MODULE_ROOT/src/flow/vector-narrower.flow"
+KC_FLOW_BIN="${KC_FLOW_BIN:-kc-flow}"
 
 # Prints one fatal error and exits.
 # @param $1 Error message.
@@ -20,18 +21,34 @@ fail() {
     exit 1
 }
 
+# Runs one command quietly, preserving stderr only on failure.
+# @param $@ Command and args.
+# @return Does not return.
+run_quiet_exec() {
+    stderr_path="$(mktemp)"
+    if "$@" 2>"$stderr_path"; then
+        rm -f "$stderr_path"
+        exit 0
+    fi
+
+    cat "$stderr_path" >&2
+    rm -f "$stderr_path"
+    exit 1
+}
+
 # Verifies that required runtime inputs are available.
 # @return 0 on success.
 require_runtime() {
     [ -f "$FLOW_PATH" ] || fail "Flow file not found at $FLOW_PATH."
-    command -v kc-flow >/dev/null 2>&1 || fail "kc-flow is required in PATH."
+    command -v "$KC_FLOW_BIN" >/dev/null 2>&1 || fail \
+        "kc-flow runtime not found: $KC_FLOW_BIN"
 }
 
 # Runs the module entry point.
 # @return Does not return.
 main() {
     require_runtime
-    exec kc-flow --run "$FLOW_PATH" "$@"
+    run_quiet_exec "$KC_FLOW_BIN" --run "$FLOW_PATH" "$@"
 }
 
 main "$@"

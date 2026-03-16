@@ -5,7 +5,7 @@ flow.param.store.path=/tmp/vector-narrower.store
 flow.param.emb.model=
 flow.param.emb.socket=
 flow.param.emb.dim=384
-flow.param.work.source_path=/tmp/vector-narrower.pack.source.$$
+flow.param.work.source_path=/tmp/vector-narrower.pack.source
 flow.link=node-1
 
 node.node-1.exec="$KC_FLOW_DIR/../bin/vnw-pack-source" "<flow.param.mode>" "<flow.param.work.source_path>" "<flow.param.source.path>"

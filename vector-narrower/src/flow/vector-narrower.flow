@@ -12,10 +12,10 @@ flow.param.ngr.separator=
 flow.param.score.mode=cosine-similarity
 flow.param.select.threshold=0.9
 flow.param.select.mode=best-per-unit
-flow.param.work.source_path=/tmp/vector-narrower.pack.source.$$
-flow.param.work.query_path=/tmp/vector-narrower.match.query.$$
-flow.param.work.segments_path=/tmp/vector-narrower.match.segments.$$
-flow.param.work.embeddings_path=/tmp/vector-narrower.match.embeddings.$$
+flow.param.work.source_path=/tmp/vector-narrower.pack.source
+flow.param.work.query_path=/tmp/vector-narrower.match.query
+flow.param.work.segments_path=/tmp/vector-narrower.match.segments
+flow.param.work.embeddings_path=/tmp/vector-narrower.match.embeddings
 flow.link=node-pack
 flow.link=node-match
 

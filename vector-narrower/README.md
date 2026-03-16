@@ -65,11 +65,11 @@ without hardcoding a binary-only record layout into a dedicated application.
 
 ```bash
 exec 3<input.txt
-/path/to/vector-narrower/bin/vector-narrower \
+./bin/vector-narrower \
     --fd-in 3 \
     --set flow.param.mode=pack \
     --set flow.param.store.path=/tmp/vnw.store \
-    --set flow.param.emb.model=/path/to/model.gguf \
+    --set flow.param.emb.model=./etc/bge-small.gguf \
     --set flow.param.emb.dim=384
 ```
 
@@ -77,11 +77,11 @@ exec 3<input.txt
 
 ```bash
 exec 3<<<"how to cook italian food"
-/path/to/vector-narrower/bin/vector-narrower \
+./bin/vector-narrower \
     --fd-in 3 \
     --set flow.param.mode=match \
     --set flow.param.store.path=/tmp/vnw.store \
-    --set flow.param.emb.model=/path/to/model.gguf \
+    --set flow.param.emb.model=./etc/bge-small.gguf \
     --set flow.param.emb.dim=384 \
     --set flow.param.ngr.max_tokens=5 \
     --set flow.param.select.threshold=0.7
@@ -92,7 +92,7 @@ exec 3<<<"how to cook italian food"
 If embeddings are served through `kc-dmn`, set:
 
 ```bash
---set flow.param.emb.socket=/tmp/kc-emb.sock
+--set flow.param.emb.socket=./run/kc-emb.sock
 ```
 
 `vnw-embed.flow` will use `kc-dmn` instead of `kc-emb --model`.
