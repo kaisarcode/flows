@@ -56,12 +56,23 @@ require_runtime() {
     [ -f "$STORE_PATH" ] || fail "Vector store not found at $STORE_PATH."
 }
 
+# Returns one active embedding socket when available.
+# @return 0 on success.
+resolve_emb_socket() {
+    if [ -n "$EMB_SOCKET" ] && kc-dmn --socket "$EMB_SOCKET" --status >/dev/null 2>&1; then
+        printf "%s\n" "$EMB_SOCKET"
+        return 0
+    fi
+    printf "\n"
+}
+
 # Runs one match operation over the configured query.
 # @return 0 on success.
 main() {
     MATCH_QUERY_PATH="$(mktemp)"
     MATCH_SEGMENTS_PATH="$(mktemp)"
     MATCH_EMBEDDINGS_PATH="$(mktemp)"
+    active_emb_socket="$(resolve_emb_socket)"
     trap 'rm -f "$MATCH_QUERY_PATH" "$MATCH_SEGMENTS_PATH" "$MATCH_EMBEDDINGS_PATH"' EXIT
 
     require_runtime
@@ -74,7 +85,7 @@ main() {
             --set flow.param.mode=match \
             --set flow.param.store.path="$STORE_PATH" \
             --set flow.param.emb.model="$MODEL_PATH" \
-            --set flow.param.emb.socket="$EMB_SOCKET" \
+            --set flow.param.emb.socket="$active_emb_socket" \
             --set flow.param.score.socket="$SCORE_SOCKET" \
             --set flow.param.emb.dim="$EMB_DIM" \
             --set flow.param.ngr.max_tokens="$NGR_MAX_TOKENS" \

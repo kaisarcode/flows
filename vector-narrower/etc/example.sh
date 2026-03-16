@@ -9,6 +9,8 @@
 set -e
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
+EMB_UP_SCRIPT="$SCRIPT_DIR/emb-up.sh"
+EMB_DOWN_SCRIPT="$SCRIPT_DIR/emb-down.sh"
 PACK_SCRIPT="$SCRIPT_DIR/pack.sh"
 MATCH_SCRIPT="$SCRIPT_DIR/match.sh"
 
@@ -23,6 +25,9 @@ fail() {
 # Verifies that required scripts are present.
 # @return 0 on success.
 require_runtime() {
+    [ -x "$EMB_UP_SCRIPT" ] || fail "Embed up script not found at $EMB_UP_SCRIPT."
+    [ -x "$EMB_DOWN_SCRIPT" ] || fail \
+        "Embed down script not found at $EMB_DOWN_SCRIPT."
     [ -x "$PACK_SCRIPT" ] || fail "Pack script not found at $PACK_SCRIPT."
     [ -x "$MATCH_SCRIPT" ] || fail "Match script not found at $MATCH_SCRIPT."
 }
@@ -31,6 +36,9 @@ require_runtime() {
 # @return 0 on success.
 main() {
     require_runtime
+    "$EMB_DOWN_SCRIPT" >/dev/null 2>&1 || true
+    trap '"$EMB_DOWN_SCRIPT" >/dev/null 2>&1 || true' EXIT
+    "$EMB_UP_SCRIPT" >/dev/null
     "$PACK_SCRIPT"
     "$MATCH_SCRIPT"
 }

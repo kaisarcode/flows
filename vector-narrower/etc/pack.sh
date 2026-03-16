@@ -52,10 +52,21 @@ require_runtime() {
     [ -f "$CORPUS_PATH" ] || fail "Example corpus not found at $CORPUS_PATH."
 }
 
+# Returns one active embedding socket when available.
+# @return 0 on success.
+resolve_emb_socket() {
+    if [ -n "$EMB_SOCKET" ] && kc-dmn --socket "$EMB_SOCKET" --status >/dev/null 2>&1; then
+        printf "%s\n" "$EMB_SOCKET"
+        return 0
+    fi
+    printf "\n"
+}
+
 # Runs one pack operation over the configured corpus.
 # @return 0 on success.
 main() {
     PACK_SOURCE_PATH="$(mktemp)"
+    active_emb_socket="$(resolve_emb_socket)"
     trap 'rm -f "$PACK_SOURCE_PATH"' EXIT
 
     require_runtime
@@ -66,7 +77,7 @@ main() {
         --set flow.param.mode=pack \
         --set flow.param.store.path="$STORE_PATH" \
         --set flow.param.emb.model="$MODEL_PATH" \
-        --set flow.param.emb.socket="$EMB_SOCKET" \
+        --set flow.param.emb.socket="$active_emb_socket" \
         --set flow.param.emb.dim="$EMB_DIM" \
         --set flow.param.work.source_path="$PACK_SOURCE_PATH" \
         >/dev/null
