@@ -82,9 +82,10 @@ build_stub_bin() {
         "    while IFS= read -r line <&7; do [ -n \"\$line\" ] || continue; emit_vec \"\$line\"; done" \
         '    exit 0' \
         'fi' \
-        'IFS= read -r A <&7 || exit 1' \
-        'IFS= read -r B <&7 || exit 1' \
-        "if [ \"\$A\" = \"\$B\" ]; then printf '1.0\\n' >&8; else printf '0.0\\n' >&8; fi" \
+        "while IFS= read -r A <&7; do" \
+        '    IFS= read -r B <&7 || exit 1' \
+        "    if [ \"\$A\" = \"\$B\" ]; then printf '1.0\\n' >&8; else printf '0.0\\n' >&8; fi" \
+        'done' \
         > "$stub_root/kc-emb"
 
     printf '%s\n' \
@@ -129,6 +130,23 @@ build_stub_bin() {
         > "$stub_root/kc-mmp"
 
     printf '%s\n' '#!/bin/bash' 'set -e' 'cat' > "$stub_root/kc-dmn"
+    printf '%s\n' \
+        '#!/bin/bash' \
+        'set -e' \
+        'SOCKET=""' \
+        "while [ \"\$#\" -gt 0 ]; do" \
+        "    case \"\$1\" in" \
+        "        --socket) SOCKET=\"\$2\"; shift 2 ;;" \
+        '        --until|--status|--stop) shift ;;' \
+        '        --) shift; break ;;' \
+        '        *) shift ;;' \
+        '    esac' \
+        'done' \
+        "case \"\$SOCKET\" in" \
+        '    *score*) exec kc-emb --mode cosine-similarity --dim 3 ;;' \
+        '    *) exec kc-emb --dim 3 ;;' \
+        'esac' \
+        > "$stub_root/kc-dmn"
 
     chmod +x "$stub_root/kc-emb" "$stub_root/kc-ngr" "$stub_root/kc-mmp" "$stub_root/kc-dmn"
 }
@@ -181,6 +199,23 @@ EOF
 
     [ "$OUTPUT" = "hello world" ] || fail "Match: expected 'hello world', got '$OUTPUT'."
     pass "Match flow verified."
+
+    exec 3<<<"hello world"
+    OUTPUT=$("$KC_BIN_EXEC" --run "$FLOW_ROOT/vnw-match.flow" \
+        --fd-in 3 \
+        --set flow.param.store.path="$TMP_DIR/store.bin" \
+        --set flow.param.emb.socket="$TMP_DIR/embed.sock" \
+        --set flow.param.score.socket="$TMP_DIR/score.sock" \
+        --set flow.param.emb.dim=3 \
+        --set flow.param.ngr.max_tokens=3 \
+        --set flow.param.select.threshold=0.5 \
+        --set flow.param.work.query_path="$TMP_DIR/query-daemon.txt" \
+        --set flow.param.work.segments_path="$TMP_DIR/segments-daemon.txt" \
+        --set flow.param.work.embeddings_path="$TMP_DIR/embeddings-daemon.txt")
+    exec 3<&-
+
+    [ "$OUTPUT" = "hello world" ] || fail "Match daemon: expected 'hello world', got '$OUTPUT'."
+    pass "Match daemon scoring verified."
 
     exec 3<"$TMP_DIR/input.txt"
     OUTPUT=$("$KC_BIN_EXEC" --run "$FLOW_ROOT/vector-narrower.flow" \

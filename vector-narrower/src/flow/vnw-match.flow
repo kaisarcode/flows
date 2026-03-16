@@ -4,6 +4,7 @@ flow.param.query.path=
 flow.param.store.path=/tmp/vector-narrower.store
 flow.param.emb.model=
 flow.param.emb.socket=
+flow.param.score.socket=
 flow.param.emb.dim=384
 flow.param.ngr.max_tokens=5
 flow.param.ngr.min_tokens=1
@@ -44,6 +45,7 @@ node.node-6.link=node-7
 
 node.node-7.file=vnw-score-select.flow
 node.node-7.param.mode=<flow.param.mode>
+node.node-7.param.score.socket=<flow.param.score.socket>
 node.node-7.param.emb.dim=<flow.param.emb.dim>
 node.node-7.param.score.mode=<flow.param.score.mode>
 node.node-7.param.select.threshold=<flow.param.select.threshold>

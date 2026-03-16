@@ -16,35 +16,77 @@ fail() {
     exit 1
 }
 
-# Computes one vector score.
-# @param $1 Query vector.
-# @param $2 Store vector.
+# Computes one batch of vector scores.
+# @param $1 Pair stream path.
+# @param $2 Score socket.
 # @param $3 Score mode.
 # @param $4 Vector dimension.
-# @return Writes one score to stdout.
-compute_score() {
-    printf '%s\n%s\n' "$1" "$2" | kc-emb --mode "$3" --dim "$4"
+# @return Writes score lines to stdout.
+compute_scores() {
+    if [ -n "$2" ]; then
+        kc-dmn --socket "$2" < "$1"
+        return 0
+    fi
+    kc-emb --mode "$3" --dim "$4" < "$1"
+}
+
+# Selects records using one score stream.
+# @param $1 Record path.
+# @param $2 Score path.
+# @param $3 Threshold.
+# @param $4 Selection mode.
+# @return Writes selected matches to stdout.
+select_matches() {
+    records_path="$1"
+    scores_path="$2"
+    threshold="$3"
+    select_mode="$4"
+    best_score=""
+    best_text=""
+    tmp_joined="$(mktemp)"
+
+    paste "$records_path" "$scores_path" > "$tmp_joined"
+    while IFS="$(printf '\t')" read -r text _vec score; do
+        [ -n "$text" ] || continue
+        if [ "$select_mode" = "all-above-threshold" ]; then
+            if awk -v s="$score" -v t="$threshold" 'BEGIN { exit !((s + 0.0) >= (t + 0.0)) }'; then
+                printf '%s\n' "$text"
+            fi
+        else
+            if awk -v s="$score" -v t="$threshold" -v b="${best_score:-}" 'BEGIN { ok=((s + 0.0) >= (t + 0.0)); better=(b == "" || (s + 0.0) > (b + 0.0)); exit !(ok && better) }'; then
+                best_score="$score"
+                best_text="$text"
+            fi
+        fi
+    done < "$tmp_joined"
+    rm -f "$tmp_joined"
+    if [ "$select_mode" != "all-above-threshold" ] && [ -n "$best_text" ]; then
+        printf '%s\n' "$best_text"
+    fi
 }
 
 # Processes one segment against one stored map snapshot.
 # @param $1 Segment text.
 # @param $2 Query vector.
 # @param $3 Store snapshot path.
-# @param $4 Vector dimension.
-# @param $5 Score mode.
-# @param $6 Threshold.
-# @param $7 Selection mode.
+# @param $4 Score socket.
+# @param $5 Vector dimension.
+# @param $6 Score mode.
+# @param $7 Threshold.
+# @param $8 Selection mode.
 # @return Writes selected matches to stdout.
 process_segment() {
-    segment="$1"
+    _segment="$1"
     query_vec="$2"
     tmp_store="$3"
-    dim="$4"
-    score_mode="$5"
-    threshold="$6"
-    select_mode="$7"
-    best_score=""
-    best_text=""
+    score_socket="$4"
+    dim="$5"
+    score_mode="$6"
+    threshold="$7"
+    select_mode="$8"
+    tmp_pairs="$(mktemp)"
+    tmp_scores="$(mktemp)"
+    tmp_records="$(mktemp)"
 
     while IFS= read -r record; do
         case "$record" in
@@ -56,52 +98,51 @@ process_segment() {
                 continue
                 ;;
         esac
-        score="$(compute_score "$query_vec" "$vec" "$score_mode" "$dim")"
-        if [ "$select_mode" = "all-above-threshold" ]; then
-            if awk -v s="$score" -v t="$threshold" 'BEGIN { exit !((s + 0.0) >= (t + 0.0)) }'; then
-                printf '%s\n' "$text"
-            fi
-        else
-            if awk -v s="$score" -v t="$threshold" -v b="${best_score:-}" 'BEGIN { ok=((s + 0.0) >= (t + 0.0)); better=(b == "" || (s + 0.0) > (b + 0.0)); exit !(ok && better) }'; then
-                best_score="$score"
-                best_text="$text"
-            fi
-        fi
+        printf '%s\t%s\n' "$text" "$vec" >> "$tmp_records"
+        printf '%s\n%s\n' "$query_vec" "$vec" >> "$tmp_pairs"
     done < "$tmp_store"
-    if [ "$select_mode" != "all-above-threshold" ] && [ -n "$best_text" ]; then
-        printf '%s\n' "$best_text"
+
+    if [ ! -s "$tmp_records" ]; then
+        rm -f "$tmp_pairs" "$tmp_scores" "$tmp_records"
+        return 0
     fi
+
+    compute_scores "$tmp_pairs" "$score_socket" "$score_mode" "$dim" > "$tmp_scores"
+    select_matches "$tmp_records" "$tmp_scores" "$threshold" "$select_mode"
+    rm -f "$tmp_pairs" "$tmp_scores" "$tmp_records"
 }
 
 # Streams selected matches from one stored map snapshot.
 # @param $1 Store snapshot path.
-# @param $2 Segments path.
-# @param $3 Embeddings path.
-# @param $4 Vector dimension.
-# @param $5 Score mode.
-# @param $6 Threshold.
-# @param $7 Selection mode.
+# @param $2 Score socket.
+# @param $3 Segments path.
+# @param $4 Embeddings path.
+# @param $5 Vector dimension.
+# @param $6 Score mode.
+# @param $7 Threshold.
+# @param $8 Selection mode.
 # @return 0 on success.
 stream_selected_matches() {
     tmp_store="$1"
-    segments_path="$2"
-    embeddings_path="$3"
-    dim="$4"
-    score_mode="$5"
-    threshold="$6"
-    select_mode="$7"
+    score_socket="$2"
+    segments_path="$3"
+    embeddings_path="$4"
+    dim="$5"
+    score_mode="$6"
+    threshold="$7"
+    select_mode="$8"
 
     paste "$segments_path" "$embeddings_path" | while IFS="$(printf '\t')" read -r segment query_vec; do
         [ -n "$segment" ] || continue
-        process_segment "$segment" "$query_vec" "$tmp_store" "$dim" "$score_mode" \
-            "$threshold" "$select_mode"
+        process_segment "$segment" "$query_vec" "$tmp_store" "$score_socket" "$dim" \
+            "$score_mode" "$threshold" "$select_mode"
     done > "/proc/self/fd/${KC_FLOW_FD_OUT}"
 }
 
 # Runs the helper entry point.
 # @return 0 on success.
 main() {
-    [ "$#" -eq 7 ] || fail "mode, score config, and work paths are required."
+    [ "$#" -eq 8 ] || fail "mode, score config, and work paths are required."
     if [ "$1" != "match" ]; then
         : > "/proc/self/fd/${KC_FLOW_FD_OUT}"
         return 0
@@ -109,7 +150,7 @@ main() {
     tmp_store="$(mktemp)"
     trap 'rm -f "$tmp_store"' EXIT
     cat "/proc/self/fd/${KC_FLOW_FD_IN}" > "$tmp_store"
-    stream_selected_matches "$tmp_store" "$6" "$7" "$2" "$3" "$4" "$5"
+    stream_selected_matches "$tmp_store" "$2" "$7" "$8" "$3" "$4" "$5" "$6"
 }
 
 main "$@"
