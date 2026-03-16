@@ -1,0 +1,7 @@
+flow.id=vnw-query-segment
+flow.param.ngr.max_tokens=5
+flow.param.ngr.min_tokens=1
+flow.param.ngr.separator= 	
+flow.link=node-1
+
+node.node-1.exec=kc-ngr --max-tokens "<flow.param.ngr.max_tokens>" --min-tokens "<flow.param.ngr.min_tokens>" --separator "<flow.param.ngr.separator>" --fd-in "$KC_FLOW_FD_IN" --fd-out "$KC_FLOW_FD_OUT"

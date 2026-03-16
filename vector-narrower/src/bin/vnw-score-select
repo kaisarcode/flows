@@ -1,0 +1,115 @@
+#!/bin/bash
+# vnw-score-select - Vector scoring helper.
+# Summary: Scores query embeddings against stored vectors and emits selected
+# matches.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+set -e
+
+# Fails with one error message.
+# @param $1 Error message.
+# @return Exits with status 1.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Computes one vector score.
+# @param $1 Query vector.
+# @param $2 Store vector.
+# @param $3 Score mode.
+# @param $4 Vector dimension.
+# @return Writes one score to stdout.
+compute_score() {
+    printf '%s\n%s\n' "$1" "$2" | kc-emb --mode "$3" --dim "$4"
+}
+
+# Processes one segment against one stored map snapshot.
+# @param $1 Segment text.
+# @param $2 Query vector.
+# @param $3 Store snapshot path.
+# @param $4 Vector dimension.
+# @param $5 Score mode.
+# @param $6 Threshold.
+# @param $7 Selection mode.
+# @return Writes selected matches to stdout.
+process_segment() {
+    segment="$1"
+    query_vec="$2"
+    tmp_store="$3"
+    dim="$4"
+    score_mode="$5"
+    threshold="$6"
+    select_mode="$7"
+    best_score=""
+    best_text=""
+
+    while IFS= read -r record; do
+        case "$record" in
+            *$'\t'*)
+                text="${record%%$'\t'*}"
+                vec="${record#*$'\t'}"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+        score="$(compute_score "$query_vec" "$vec" "$score_mode" "$dim")"
+        if [ "$select_mode" = "all-above-threshold" ]; then
+            if awk -v s="$score" -v t="$threshold" 'BEGIN { exit !((s + 0.0) >= (t + 0.0)) }'; then
+                printf '%s\n' "$text"
+            fi
+        else
+            if awk -v s="$score" -v t="$threshold" -v b="${best_score:-}" 'BEGIN { ok=((s + 0.0) >= (t + 0.0)); better=(b == "" || (s + 0.0) > (b + 0.0)); exit !(ok && better) }'; then
+                best_score="$score"
+                best_text="$text"
+            fi
+        fi
+    done < "$tmp_store"
+    if [ "$select_mode" != "all-above-threshold" ] && [ -n "$best_text" ]; then
+        printf '%s\n' "$best_text"
+    fi
+}
+
+# Streams selected matches from one stored map snapshot.
+# @param $1 Store snapshot path.
+# @param $2 Segments path.
+# @param $3 Embeddings path.
+# @param $4 Vector dimension.
+# @param $5 Score mode.
+# @param $6 Threshold.
+# @param $7 Selection mode.
+# @return 0 on success.
+stream_selected_matches() {
+    tmp_store="$1"
+    segments_path="$2"
+    embeddings_path="$3"
+    dim="$4"
+    score_mode="$5"
+    threshold="$6"
+    select_mode="$7"
+
+    paste "$segments_path" "$embeddings_path" | while IFS="$(printf '\t')" read -r segment query_vec; do
+        [ -n "$segment" ] || continue
+        process_segment "$segment" "$query_vec" "$tmp_store" "$dim" "$score_mode" \
+            "$threshold" "$select_mode"
+    done > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+}
+
+# Runs the helper entry point.
+# @return 0 on success.
+main() {
+    [ "$#" -eq 7 ] || fail "mode, score config, and work paths are required."
+    if [ "$1" != "match" ]; then
+        : > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+        return 0
+    fi
+    tmp_store="$(mktemp)"
+    trap 'rm -f "$tmp_store"' EXIT
+    cat "/proc/self/fd/${KC_FLOW_FD_IN}" > "$tmp_store"
+    stream_selected_matches "$tmp_store" "$6" "$7" "$2" "$3" "$4" "$5"
+}
+
+main "$@"

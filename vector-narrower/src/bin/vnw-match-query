@@ -1,0 +1,55 @@
+#!/bin/bash
+# vnw-match-query - Match query staging helper.
+# Summary: Prepares the query artifact and work files for one match flow.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+set -e
+
+# Fails with one error message.
+# @param $1 Error message.
+# @return Exits with status 1.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Clears one match work set when the mode is inactive.
+# @param $1 Query path.
+# @param $2 Segments path.
+# @param $3 Embeddings path.
+# @return 0 on success.
+clear_match_outputs() {
+    : > "$1"
+    : > "$2"
+    : > "$3"
+    : > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+}
+
+# Emits one active query artifact.
+# @param $1 Query file path.
+# @param $2 Optional query source path.
+# @return 0 on success.
+emit_query_artifact() {
+    query_path="$1"
+    query_source_path="$2"
+    if [ -n "$query_source_path" ]; then
+        tee "$query_path" > "/proc/self/fd/${KC_FLOW_FD_OUT}" < "$query_source_path"
+    else
+        tee "$query_path" > "/proc/self/fd/${KC_FLOW_FD_OUT}" < "/proc/self/fd/${KC_FLOW_FD_IN}"
+    fi
+}
+
+# Runs the helper entry point.
+# @return 0 on success.
+main() {
+    [ "$#" -eq 5 ] || fail "mode and query work paths are required."
+    if [ "$1" != "match" ]; then
+        clear_match_outputs "$2" "$4" "$5"
+        return 0
+    fi
+    emit_query_artifact "$2" "$3"
+}
+
+main "$@"

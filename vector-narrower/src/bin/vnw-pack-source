@@ -1,0 +1,51 @@
+#!/bin/bash
+# vnw-pack-source - Pack source staging helper.
+# Summary: Prepares the source text artifact and work file for one pack flow.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+set -e
+
+# Fails with one error message.
+# @param $1 Error message.
+# @return Exits with status 1.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Clears one pack source output when the mode is inactive.
+# @param $1 Work source path.
+# @return 0 on success.
+clear_pack_output() {
+    : > "$1"
+    : > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+}
+
+# Emits one active pack source artifact.
+# @param $1 Work source path.
+# @param $2 Optional source path.
+# @return 0 on success.
+emit_pack_source() {
+    work_source_path="$1"
+    source_path="$2"
+    if [ -n "$source_path" ]; then
+        tee "$work_source_path" > "/proc/self/fd/${KC_FLOW_FD_OUT}" < "$source_path"
+    else
+        tee "$work_source_path" > "/proc/self/fd/${KC_FLOW_FD_OUT}" < "/proc/self/fd/${KC_FLOW_FD_IN}"
+    fi
+}
+
+# Runs the helper entry point.
+# @return 0 on success.
+main() {
+    [ "$#" -eq 3 ] || fail "mode, work source path, and source path are required."
+    if [ "$1" != "pack" ]; then
+        clear_pack_output "$2"
+        return 0
+    fi
+    emit_pack_source "$2" "$3"
+}
+
+main "$@"

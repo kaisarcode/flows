@@ -1,0 +1,36 @@
+#!/bin/bash
+# vnw-store-read - Store read helper.
+# Summary: Streams one stored vector map into one flow output descriptor.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+set -e
+
+# Fails with one error message.
+# @param $1 Error message.
+# @return Exits with status 1.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Streams one stored map when the mode is active.
+# @param $1 Store path.
+# @return 0 on success.
+stream_store() {
+    kc-mmp --map "$1" --mode get --fd-out "$KC_FLOW_FD_OUT"
+}
+
+# Runs the helper entry point.
+# @return 0 on success.
+main() {
+    [ "$#" -eq 2 ] || fail "mode and store path are required."
+    if [ "$1" != "match" ]; then
+        : > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+        return 0
+    fi
+    stream_store "$2"
+}
+
+main "$@"

@@ -1,0 +1,83 @@
+#!/bin/bash
+# vnw-store-write - Store write helper.
+# Summary: Merges source texts and embeddings into one persisted vector store.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+set -e
+
+# Fails with one error message.
+# @param $1 Error message.
+# @return Exits with status 1.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Validates one source/vector line count pair.
+# @param $1 Source path.
+# @param $2 Vector path.
+# @return 0 on success.
+validate_record_counts() {
+    src_count="$(awk 'END { print NR }' "$1")"
+    vec_count="$(awk 'END { print NR }' "$2")"
+    [ "$src_count" = "$vec_count" ] || fail \
+        "vector-narrower: source/vector count mismatch source=${src_count} vectors=${vec_count} path=$1"
+}
+
+# Loads one existing store snapshot when present.
+# @param $1 Store path.
+# @param $2 Snapshot path.
+# @return 0 on success.
+load_store_snapshot() {
+    if [ -f "$1" ]; then
+        kc-mmp --map "$1" --mode get > "$2"
+    else
+        : > "$2"
+    fi
+}
+
+# Appends source/vector records into one snapshot.
+# @param $1 Source path.
+# @param $2 Vector path.
+# @param $3 Snapshot path.
+# @return 0 on success.
+append_records() {
+    paste "$1" "$2" | while IFS="$(printf '\t')" read -r text vector; do
+        [ -n "$text" ] || continue
+        text="$(printf '%s' "$text" | tr '\t' ' ')"
+        printf '%s\t%s\n' "$text" "$vector"
+    done >> "$3"
+}
+
+# Writes one updated store snapshot and emits it.
+# @param $1 Store path.
+# @param $2 Source path.
+# @return 0 on success.
+write_store() {
+    store_path="$1"
+    source_path="$2"
+    tmp_store="$(mktemp)"
+    tmp_vectors="$(mktemp)"
+    trap 'rm -f "$tmp_store" "$tmp_vectors"' EXIT
+    load_store_snapshot "$store_path" "$tmp_store"
+    cat "/proc/self/fd/${KC_FLOW_FD_IN}" > "$tmp_vectors"
+    validate_record_counts "$source_path" "$tmp_vectors"
+    append_records "$source_path" "$tmp_vectors" "$tmp_store"
+    kc-mmp --map "$store_path" --mode set < "$tmp_store"
+    cat "$tmp_store" > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+}
+
+# Runs the helper entry point.
+# @return 0 on success.
+main() {
+    [ "$#" -eq 3 ] || fail "mode, store path, and source path are required."
+    if [ "$1" != "pack" ]; then
+        : > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+        return 0
+    fi
+    write_store "$2" "$3"
+}
+
+main "$@"

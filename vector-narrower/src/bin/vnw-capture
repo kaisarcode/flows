@@ -1,0 +1,34 @@
+#!/bin/bash
+# vnw-capture - Flow artifact capture helper.
+# Summary: Copies one flow input artifact into one file and one output
+# descriptor.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+set -e
+
+# Fails with one error message.
+# @param $1 Error message.
+# @return Exits with status 1.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Copies one input artifact into one file and output descriptor.
+# @param $1 Destination file path.
+# @return 0 on success.
+capture_artifact() {
+    path="$1"
+    tee "$path" > "/proc/self/fd/${KC_FLOW_FD_OUT}" < "/proc/self/fd/${KC_FLOW_FD_IN}"
+}
+
+# Runs the helper entry point.
+# @return 0 on success.
+main() {
+    [ "$#" -eq 1 ] || fail "capture path is required."
+    capture_artifact "$1"
+}
+
+main "$@"

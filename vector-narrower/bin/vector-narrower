@@ -1,0 +1,37 @@
+#!/bin/bash
+# vector-narrower - Launcher for the vector-narrower kc-flow module.
+# Summary: Resolves the root flow path and executes it through kc-flow.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+set -e
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
+MODULE_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
+FLOW_PATH="$MODULE_ROOT/src/flow/vector-narrower.flow"
+
+# Prints one fatal error and exits.
+# @param $1 Error message.
+# @return Does not return.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Verifies that required runtime inputs are available.
+# @return 0 on success.
+require_runtime() {
+    [ -f "$FLOW_PATH" ] || fail "Flow file not found at $FLOW_PATH."
+    command -v kc-flow >/dev/null 2>&1 || fail "kc-flow is required in PATH."
+}
+
+# Runs the module entry point.
+# @return Does not return.
+main() {
+    require_runtime
+    exec kc-flow --run "$FLOW_PATH" "$@"
+}
+
+main "$@"

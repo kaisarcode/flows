@@ -1,0 +1,52 @@
+#!/bin/bash
+# vnw-embed - Flow embedding helper.
+# Summary: Generates embeddings through kc-emb or kc-dmn for one flow input
+# stream.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+set -e
+
+# Fails with one error message.
+# @param $1 Error message.
+# @return Exits with status 1.
+fail() {
+    printf "Error: %s\n" "$1" >&2
+    exit 1
+}
+
+# Streams embeddings through one daemon socket.
+# @param $1 Socket path.
+# @return 0 on success.
+stream_socket_embeddings() {
+    socket_path="$1"
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        printf '%s\n' "$line" | kc-dmn --socket "$socket_path"
+    done < "/proc/self/fd/${KC_FLOW_FD_IN}" > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+}
+
+# Streams embeddings through kc-emb.
+# @param $1 Model path.
+# @param $2 Vector dimension.
+# @return 0 on success.
+stream_model_embeddings() {
+    model_path="$1"
+    dim="$2"
+    kc-emb --model "$model_path" --dim "$dim" --fd-in "$KC_FLOW_FD_IN" \
+        > "/proc/self/fd/${KC_FLOW_FD_OUT}"
+}
+
+# Runs the helper entry point.
+# @return 0 on success.
+main() {
+    [ "$#" -eq 3 ] || fail "model path, socket path, and dimension are required."
+    if [ -n "$2" ]; then
+        stream_socket_embeddings "$2"
+        return 0
+    fi
+    stream_model_embeddings "$1" "$3"
+}
+
+main "$@"
