@@ -8,10 +8,6 @@
 
 set -e
 
-# Prepares the temporary vector store and executes semantic queries.
-# @param $1 Path to the GGUF model.
-# @param $2 Path to the vector-narrower launcher.
-# @return 0 on success.
 run_example() {
     model_path="$1"
     vnw_bin="$2"
@@ -35,11 +31,12 @@ run_example() {
         --store "$tmp_dir/kb.store" \
         --model "$model_path" \
         --dim 384 \
-        < "$tmp_dir/data.txt"
+        < "$tmp_dir/data.txt" \
+        > /dev/null 2>/dev/null
     printf "\033[1;30m[TIME: %ss]\033[0m\n" "${SECONDS}"
 
     printf "\n\033[1;34m[STEP 2]\033[0m Starting persistent embedding daemon (kc-dmn)...\n"
-    kc-dmn --socket "$sock" --start kc-emb -- --model "$model_path" --dim 384
+    kc-dmn --socket "$sock" --start kc-emb -- --model "$model_path" --dim 384 >/dev/null 2>&1
 
     SECONDS=0
     printf "\n\033[1;34m[STEP 3]\033[0m Natural Language Query: \033[32m\"AI and modern industry\"\033[0m\n"
@@ -50,6 +47,7 @@ run_example() {
             --emb-socket "$sock" \
             --dim 384 \
             --threshold 0.7 \
+            2>/dev/null \
         | sort -u
     printf "\033[1;30m[TIME: %ss]\033[0m\n" "${SECONDS}"
 
@@ -62,6 +60,7 @@ run_example() {
             --emb-socket "$sock" \
             --dim 384 \
             --threshold 0.7 \
+            2>/dev/null \
         | sort -u
     printf "\033[1;30m[TIME: %ss]\033[0m\n" "${SECONDS}"
 
@@ -74,12 +73,11 @@ run_example() {
             --emb-socket "$sock" \
             --dim 384 \
             --threshold 0.5 \
+            2>/dev/null \
         | sort -u
     printf "\033[1;30m[TIME: %ss]\033[0m\n" "${SECONDS}"
 }
 
-# Main entry point.
-# @return 0 on success.
 main() {
     script_dir="$(CDPATH='' cd -- "$(dirname "$0")" && pwd)"
     model="$script_dir/bge-small.gguf"
