@@ -2,9 +2,9 @@
 
 > **Note:** This application is in the development and testing phase, is not ready for production use, and may change without prior notice.
 
-`vector-narrower` is a high-performance command-line application for semantic content filtering. It identifies known text fragments within a stream by performing vector similarity matching against a memory-mapped database.
+`vector-narrower` is a command-line application for semantic content filtering. It identifies known text fragments within a stream by performing vector similarity matching against a memory-mapped database.
 
-Designed to work as a first-class executable within the KaisarCode ecosystem, it abstracts complex internal flow logic into two simple public operations: `pack` and `match`.
+The application exposes two primary operations: `pack` (to build the database) and `match` (to query it).
 
 ## Usage
 
@@ -16,7 +16,7 @@ printf "The history of Rome\nCooking pasta" | vector-narrower pack --store kb.bi
 ```
 
 ### Semantic Matching (Match)
-Search the database using natural language queries:
+Search the database using natural language queries. `vector-narrower` reads queries from stdin and emits matching segments:
 
 ```bash
 echo "How to cook italian food" | vector-narrower match --store kb.bin --model bge-small.gguf --threshold 0.7
@@ -34,7 +34,7 @@ echo "How to cook italian food" | vector-narrower match --store kb.bin --model b
 | `--store` | Path to the vector database file. | `/tmp/vector-narrower.store` |
 | `--model` | Path to the GGUF model file. | `NULL` |
 | `--dim` | Vector dimension of the model. | `384` |
-| `--emb-socket`| Path to the embedding daemon socket (`kc-dmn`). | `NULL` |
+| `--emb-socket`| Path to the embedding daemon socket. | `NULL` |
 | `--fd-in` | Input descriptor for text or query. | `0` (stdin) |
 | `--fd-out` | Output descriptor for results or logs. | `1` (stdout) |
 | `--trace` | Show internal execution trace for debugging. | `false` |
@@ -47,43 +47,37 @@ echo "How to cook italian food" | vector-narrower match --store kb.bin --model b
 | `--select-mode`| Filtering mode: `best-per-unit` or `all`. | `best-per-unit` |
 | `--score-mode` | Scoring algorithm: `cosine-similarity`. | `cosine-similarity` |
 
-## Install
+## Advanced Examples
 
-Run the autonomous installer:
+### Flow Parameter Overrides
+For advanced integration and deep overriding, the application accepts direct `flow.param.*` mappings if explicitly needed.
 
-```bash
-wget -qO- https://raw.githubusercontent.com/kaisarcode/flows/slave/vector-narrower/install.sh | sudo bash
-```
-
-## Testing
-
-```bash
-./test.sh
-```
+| Flag | Equivalent Flow Parameter |
+| :--- | :--- |
+| `--store <path>` | `--set flow.param.store.path=<path>` |
+| `--model <path>` | `--set flow.param.emb.model=<path>` |
+| `--threshold <f>` | `--set flow.param.select.threshold=<f>` |
 
 ## Internal Architecture
 
-The `vector-narrower` executable is powered by an internal implementation based on `kc-flow` and modular FD-oriented helpers. This allows for transparent orchestration of high-performance primitives.
+Internally, `vector-narrower` is implemented using the KaisarCode flow engine and a series of dedicated helper binaries. The application orchestration relies on these transparent components:
 
-### Core Flows
+### Flow Decomposition
 - `src/flow/pack.flow`: Entry point for database construction.
 - `src/flow/match.flow`: Entry point for similarity search logic.
-
-### Internal Components
 - `src/flow/internal/embed.flow`: Encapsulates embedding generation.
-- `src/flow/internal/store-write.flow`: Handles vector store serialization.
 - `src/flow/internal/store-read.flow`: Handles vector store retrieval.
-- `src/flow/internal/query-segment.flow`: Decomposes query stream into chunks.
+- `src/flow/internal/store-write.flow`: Handles vector store serialization.
+- `src/flow/internal/query-segment.flow`: Decomposes the query stream into chunks.
 - `src/flow/internal/score-select.flow`: Filters results based on threshold and mode.
 
-### Advanced Usage (Flow Parameters)
-For advanced integration, the launcher maps public flags to internal `flow.param` values. You can override these directly if using `kc-flow` as your entry point:
-
-| Flag | Flow Parameter |
-| :--- | :--- |
-| `--store` | `flow.param.store.path` |
-| `--model` | `flow.param.emb.model` |
-| `--threshold` | `flow.param.select.threshold` |
+### Internal Helpers
+Located in `src/bin/`, these atomic, FD-oriented utilities handle tasks that require low-level I/O manipulation:
+- `vnw-pack-source`: Prepares source text for embedding.
+- `vnw-match-query`: Prepares matching environment.
+- `vnw-embed`: Handles model/daemon embedding logic.
+- `vnw-store-read` / `vnw-store-write`: Manages record serialization using `kc-mmp`.
+- `vnw-score-select`: Final candidate selection logic based on vector similarity.
 
 ---
 
