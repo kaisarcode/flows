@@ -2,23 +2,23 @@
 
 > **Note:** This application is in the development and testing phase, is not ready for production use, and may change without prior notice.
 
-`vector-narrower` is an application for semantic content filtering. It identifies known vectorized fragments within a text stream using vector similarity matching against a memory-mapped database.
+`vector-narrower` is a high-performance command-line application for semantic content filtering. It identifies known text fragments within a stream by performing vector similarity matching against a memory-mapped database.
+
+Designed to work as a first-class executable within the KaisarCode ecosystem, it abstracts complex internal flow logic into two simple public operations: `pack` and `match`.
 
 ## Usage
 
 ### Build the Vector Database (Pack)
-Take a list of text entries and generate their embeddings to create a serialized vector store:
+Transform source text into a serialized vector store:
 
 ```bash
-# Line-by-line text input to a vectorized map
 printf "The history of Rome\nCooking pasta" | vector-narrower pack --store kb.bin --model bge-small.gguf
 ```
 
 ### Semantic Matching (Match)
-Search the database using natural language. `vector-narrower` segments the query and finds the best semantic matches:
+Search the database using natural language queries:
 
 ```bash
-# Querying the knowledge base
 echo "How to cook italian food" | vector-narrower match --store kb.bin --model bge-small.gguf --threshold 0.7
 ```
 
@@ -37,7 +37,7 @@ echo "How to cook italian food" | vector-narrower match --store kb.bin --model b
 | `--emb-socket`| Path to the embedding daemon socket (`kc-dmn`). | `NULL` |
 | `--fd-in` | Input descriptor for text or query. | `0` (stdin) |
 | `--fd-out` | Output descriptor for results or logs. | `1` (stdout) |
-| `--trace` | Show internal flow execution trace. | `false` |
+| `--trace` | Show internal execution trace for debugging. | `false` |
 | `--help` | Show help and usage. | `false` |
 
 ### `match` Specific Options
@@ -63,20 +63,27 @@ wget -qO- https://raw.githubusercontent.com/kaisarcode/flows/slave/vector-narrow
 
 ## Internal Architecture
 
-`vector-narrower` is implemented as a `kc-flow` module. The public `vector-narrower` binary is a launcher that coordinates internal flow graphs and FD-oriented helpers.
+The `vector-narrower` executable is powered by an internal implementation based on `kc-flow` and modular FD-oriented helpers. This allows for transparent orchestration of high-performance primitives.
 
-### Flow Decomposition
-- `src/flow/pack.flow`: Orchestrates the database building process.
-- `src/flow/match.flow`: Orchestrates the semantic search process.
-- `src/flow/internal/`: Contains reusable subflows for embedding, storage, and scoring.
+### Core Flows
+- `src/flow/pack.flow`: Entry point for database construction.
+- `src/flow/match.flow`: Entry point for similarity search logic.
 
-### Internal Helpers
-Located in `src/bin/`, these small FD-oriented utilities implement atomic actions that cannot be safely expressed inline within flow templates:
-- `vnw-pack-source`: Prepares source text for embedding.
-- `vnw-match-query`: Prepares matching environment.
-- `vnw-embed`: Handles model/daemon embedding logic.
-- `vnw-store-read`/`write`: Manages record serialization using `kc-mmp`.
-- `vnw-score-select`: Final candidate selection logic.
+### Internal Components
+- `src/flow/internal/embed.flow`: Encapsulates embedding generation.
+- `src/flow/internal/store-write.flow`: Handles vector store serialization.
+- `src/flow/internal/store-read.flow`: Handles vector store retrieval.
+- `src/flow/internal/query-segment.flow`: Decomposes query stream into chunks.
+- `src/flow/internal/score-select.flow`: Filters results based on threshold and mode.
+
+### Advanced Usage (Flow Parameters)
+For advanced integration, the launcher maps public flags to internal `flow.param` values. You can override these directly if using `kc-flow` as your entry point:
+
+| Flag | Flow Parameter |
+| :--- | :--- |
+| `--store` | `flow.param.store.path` |
+| `--model` | `flow.param.emb.model` |
+| `--threshold` | `flow.param.select.threshold` |
 
 ---
 
