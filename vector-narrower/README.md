@@ -2,91 +2,107 @@
 
 > **Note:** This application is in the development and testing phase, is not ready for production use, and may change without prior notice.
 
-`vector-narrower` is a command-line application for semantic content filtering. It identifies known text fragments within a stream by performing vector similarity matching against a memory-mapped database.
-
-The application exposes two primary operations: `pack` (to build the database) and `match` (to query it).
+`vector-narrower` builds vectorized text stores from source text and matches natural language queries against those stores. It uses n-gram segmentation, embedding generation, persisted text/vector records, and score-based selection to narrow candidate content from a larger text space.
 
 ## Usage
 
-### Build the Vector Database (Pack)
-Transform source text into a serialized vector store:
+### Pack
+
+Take line-by-line source text and build a persisted vector store:
 
 ```bash
-printf "The history of Rome\nCooking pasta" | vector-narrower pack --store kb.bin --model bge-small.gguf
+printf "The history of Rome\nCooking pasta" \
+  | ./bin/vector-narrower pack \
+      --store /tmp/vnw.store \
+      --model ./etc/bge-small.gguf \
+      --dim 384
 ```
 
-### Semantic Matching (Match)
-Search the database using natural language queries. `vector-narrower` reads queries from stdin and emits matching segments:
+### Match
+
+Query an existing vector store using natural language:
 
 ```bash
-echo "How to cook italian food" | vector-narrower match --store kb.bin --model bge-small.gguf --threshold 0.7
+echo "How to cook italian food" \
+  | ./bin/vector-narrower match \
+      --store /tmp/vnw.store \
+      --model ./etc/bge-small.gguf \
+      --dim 384 \
+      --threshold 0.7
+```
+
+### Match using explicit descriptors
+
+```bash
+exec 3<<<"roman empire history"
+
+./bin/vector-narrower match \
+    --fd-in 3 \
+    --store /tmp/vnw.store \
+    --model ./etc/bge-small.gguf \
+    --dim 384 \
+    --threshold 0.7
 ```
 
 ## Parameter Reference
 
-### Commands
-- `pack`: Build a vector database from source text.
-- `match`: Search the database with a query.
-
-### Shared Options
-| Option | Description | Default |
+| Flag | Description | Default |
 | :--- | :--- | :--- |
-| `--store` | Path to the vector database file. | `/tmp/vector-narrower.store` |
-| `--model` | Path to the GGUF model file. | `NULL` |
-| `--dim` | Vector dimension of the model. | `384` |
-| `--emb-socket`| Path to the embedding daemon socket. | `NULL` |
-| `--fd-in` | Input descriptor for text or query. | `0` (stdin) |
-| `--fd-out` | Output descriptor for results or logs. | `1` (stdout) |
-| `--trace` | Show internal execution trace for debugging. | `false` |
+| `--store` | Path to the persisted vector store. | `NULL` |
+| `--map` | Alias for `--store`. | `NULL` |
+| `--model` | Path to the embedding model. | `NULL` |
+| `--emb-socket` | Optional embedding daemon socket. | `NULL` |
+| `--dim` | Embedding dimension. | `384` |
+| `--min-tokens` | Minimum n-gram token count. | implementation-defined |
+| `--max-tokens` | Maximum n-gram token count. | implementation-defined |
+| `--threshold` | Minimum selection threshold for `match`. | implementation-defined |
+| `--select-mode` | Selection strategy for `match`. | implementation-defined |
+| `--score-mode` | Scoring strategy for `match`. | implementation-defined |
+| `--fd-in` | Input descriptor. | `stdin` |
+| `--fd-out` | Output descriptor. | `stdout` |
 | `--help` | Show help and usage. | `false` |
-
-### `match` Specific Options
-| Option | Description | Default |
-| :--- | :--- | :--- |
-| `--threshold` | Similarity threshold (0.0 to 1.0) for matching. | `0.9` |
-| `--select-mode`| Filtering mode: `best-per-unit` or `all`. | `best-per-unit` |
-| `--score-mode` | Scoring algorithm: `cosine-similarity`. | `cosine-similarity` |
-
-## Advanced Examples
-
-### Flow Parameter Overrides
-For advanced integration and deep overriding, the application accepts direct `flow.param.*` mappings if explicitly needed.
-
-| Flag | Equivalent Flow Parameter |
-| :--- | :--- |
-| `--store <path>` | `--set flow.param.store.path=<path>` |
-| `--model <path>` | `--set flow.param.emb.model=<path>` |
-| `--threshold <f>` | `--set flow.param.select.threshold=<f>` |
 
 ## Internal Architecture
 
-Internally, `vector-narrower` is implemented using the KaisarCode flow engine and a series of dedicated helper binaries. The application orchestration relies on these transparent components:
+`vector-narrower` is launched through:
 
-### Flow Decomposition
-- `src/flow/pack.flow`: Entry point for database construction.
-- `src/flow/match.flow`: Entry point for similarity search logic.
-- `src/flow/internal/embed.flow`: Encapsulates embedding generation.
-- `src/flow/internal/store-read.flow`: Handles vector store retrieval.
-- `src/flow/internal/store-write.flow`: Handles vector store serialization.
-- `src/flow/internal/query-segment.flow`: Decomposes the query stream into chunks.
-- `src/flow/internal/score-select.flow`: Filters results based on threshold and mode.
+- `bin/vector-narrower`
 
-### Internal Helpers
-Located in `src/bin/`, these atomic, FD-oriented utilities handle tasks that require low-level I/O manipulation:
-- `vnw-pack-source`: Prepares source text for embedding.
-- `vnw-match-query`: Prepares matching environment.
-- `vnw-embed`: Handles model/daemon embedding logic.
-- `vnw-store-read` / `vnw-store-write`: Manages record serialization using `kc-mmp`.
-- `vnw-score-select`: Final candidate selection logic based on vector similarity.
+Its current flow layout is:
+
+- `src/flow/pack.flow`
+- `src/flow/match.flow`
+- `src/flow/vector-narrower.flow`
+- `src/flow/internal/embed.flow`
+- `src/flow/internal/store-write.flow`
+- `src/flow/internal/store-read.flow`
+- `src/flow/internal/query-segment.flow`
+- `src/flow/internal/score-select.flow`
+
+Helper scripts under `src/bin/` implement fd-oriented atomic operations used by the flow layer.
+
+## Install
+
+Install through the surrounding flows/tooling environment required by this repository.
+
+## Build
+
+No standalone package build step is required beyond the repository runtime/tooling used by `kc-flow`.
+
+## Testing
+
+```bash
+./test.sh
+```
 
 ---
 
 **Author:** KaisarCode
 
-**Email:** <kaisar@kaisarcode.com>
+**Email:** kaisar@kaisarcode.com
 
-**Website:** [https://kaisarcode.com](https://kaisarcode.com)
+**Website:** https://kaisarcode.com
 
-**License:** [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
+**License:** GNU GPL v3.0
 
 © 2026 KaisarCode
